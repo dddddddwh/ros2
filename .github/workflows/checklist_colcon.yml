@@ -1,0 +1,16 @@
+name: Docking colcon acceptance
+on:
+  push:
+    branches: [validation/checklist-colcon-nov12]
+permissions:
+  contents: read
+jobs:
+  colcon:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: src/ground/mujoco_forklift_pallet_docking
+      - run: docker build -t mujoco-forklift-pallet-docking:latest src/ground/mujoco_forklift_pallet_docking
+      - run: docker run --rm mujoco-forklift-pallet-docking:latest bash -lc 'source /opt/ros/humble/setup.bash && source /ros_ws/install/setup.bash && colcon test --return-code-on-test-failure --packages-select mujoco_forklift_pallet_docking && colcon test-result --verbose'
