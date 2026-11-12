@@ -1,0 +1,27 @@
+name: Checklist runtime acceptance
+on:
+  push:
+    branches: [validation/checklist-nov12-runtime]
+permissions:
+  contents: read
+jobs:
+  runtime:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            src/ground/mujoco_forklift_pallet_docking
+            src/ground/forklift_slam_nav
+      - name: Docker base build
+        run: docker build -t mujoco-forklift-pallet-docking:latest src/ground/mujoco_forklift_pallet_docking
+      - name: Docking tests and launch evaluate
+        run: |
+          docker run --rm mujoco-forklift-pallet-docking:latest bash -lc 'source /opt/ros/humble/setup.bash && source /ros_ws/install/setup.bash && ros2 pkg prefix mujoco_forklift_pallet_docking && python3 -m pytest /ros_ws/src/mujoco_forklift_pallet_docking/test -v && timeout 180 ros2 launch mujoco_forklift_pallet_docking main.launch.py'
+      - name: Navigation Docker build
+        run: docker build -f src/ground/forklift_slam_nav/Dockerfile -t forklift-slam-nav:humble .
+      - name: Navigation tests and live topics
+        run: |
+          docker run --rm forklift-slam-nav:humble bash -lc 'source /opt/ros/humble/setup.bash && source /ws/install/setup.bash && export AMENT_PREFIX_PATH=/ws/install:$AMENT_PREFIX_PATH && ros2 pkg prefix forklift_slam_nav && python3 -m pytest /ws/src/forklift_slam_nav/test -v && timeout 100 ros2 launch forklift_slam_nav main.launch.py'
+
