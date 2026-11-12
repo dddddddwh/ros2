@@ -1,0 +1,39 @@
+name: PR994 PR996 exact-head acceptance
+on:
+  push:
+    branches: [validation/pr994996-colcon-nov12]
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pr: 994
+            head: 93f9281ecfce163bb8ddf213b165ca61f19d7d1a
+            count: 7
+          - pr: 996
+            head: d3e32b1b2d14e69728af29f4e64643cf911fc1e4
+            count: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.head }}
+          sparse-checkout: |
+            src/ground/mujoco_forklift_pallet_docking
+            src/ground/forklift_slam_nav
+      - name: Build docking image
+        run: docker build -t mujoco-forklift-pallet-docking:latest src/ground/mujoco_forklift_pallet_docking
+      - name: Docking colcon tests and installed launch
+        run: |
+          docker run --rm mujoco-forklift-pallet-docking:latest bash -lc 'set -eo pipefail; source /opt/ros/humble/setup.bash; source /ros_ws/install/setup.bash; colcon test --merge-install --return-code-on-test-failure --packages-select mujoco_forklift_pallet_docking; colcon test-result --verbose | tee /tmp/result; grep -q "Summary: ${{ matrix.count }} tests, 0 errors, 0 failures" /tmp/result; ros2 pkg executables mujoco_forklift_pallet_docking; ros2 launch mujoco_forklift_pallet_docking main.launch.py --show-args; ros2 run mujoco_forklift_pallet_docking main --help; ros2 run mujoco_forklift_pallet_docking forklift_pallet_docking --help'
+      - name: Build navigation image
+        if: matrix.pr == 996
+        run: docker build -f src/ground/forklift_slam_nav/Dockerfile -t forklift-slam-nav:humble .
+      - name: Navigation colcon tests and installed launch
+        if: matrix.pr == 996
+        run: |
+          docker run --rm forklift-slam-nav:humble bash -lc 'set -eo pipefail; source /opt/ros/humble/setup.bash; source /ws/install/setup.bash; export AMENT_PREFIX_PATH=/ws/install:$AMENT_PREFIX_PATH; colcon test --merge-install --return-code-on-test-failure --packages-select forklift_slam_nav; colcon test-result --verbose | tee /tmp/result; grep -q "Summary: 4 tests, 0 errors, 0 failures" /tmp/result; ros2 pkg executables forklift_slam_nav; ros2 launch forklift_slam_nav main.launch.py --show-args; ros2 launch forklift_slam_nav bringup.launch.py --show-args; test -x /ws/install/lib/forklift_slam_nav/main; test -x /ws/install/lib/forklift_slam_nav/mujoco_robot'
