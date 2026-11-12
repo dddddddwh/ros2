@@ -15,10 +15,14 @@ jobs:
             src/ground/mujoco_forklift_pallet_docking
             src/ground/forklift_slam_nav
       - name: Docker base build
+        id: basebuild
         run: docker build -t mujoco-forklift-pallet-docking:latest src/ground/mujoco_forklift_pallet_docking
       - name: Docking tests and launch evaluate
         run: |
-          docker run --rm mujoco-forklift-pallet-docking:latest bash -lc 'source /opt/ros/humble/setup.bash && source /ros_ws/install/setup.bash && ros2 pkg prefix mujoco_forklift_pallet_docking && python3 -m pytest /ros_ws/src/mujoco_forklift_pallet_docking/test -v && timeout 180 ros2 launch mujoco_forklift_pallet_docking main.launch.py'
+          docker run --rm mujoco-forklift-pallet-docking:latest bash -lc 'source /opt/ros/humble/setup.bash && source /ros_ws/install/setup.bash && ros2 pkg prefix mujoco_forklift_pallet_docking && python3 -m pytest /ros_ws/src/mujoco_forklift_pallet_docking/test -v'
+      - name: Docking launch evaluate
+        if: always() && steps.basebuild.outcome == 'success'
+        run: docker run --rm mujoco-forklift-pallet-docking:latest bash -lc 'source /opt/ros/humble/setup.bash && source /ros_ws/install/setup.bash && timeout 180 ros2 launch mujoco_forklift_pallet_docking main.launch.py'
       - name: Navigation Docker build
         if: always()
         id: navbuild
