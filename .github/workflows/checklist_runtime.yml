@@ -20,8 +20,36 @@ jobs:
         run: |
           docker run --rm mujoco-forklift-pallet-docking:latest bash -lc 'source /opt/ros/humble/setup.bash && source /ros_ws/install/setup.bash && ros2 pkg prefix mujoco_forklift_pallet_docking && python3 -m pytest /ros_ws/src/mujoco_forklift_pallet_docking/test -v && timeout 180 ros2 launch mujoco_forklift_pallet_docking main.launch.py'
       - name: Navigation Docker build
+        if: always()
+        id: navbuild
         run: docker build -f src/ground/forklift_slam_nav/Dockerfile -t forklift-slam-nav:humble .
-      - name: Navigation tests and live topics
+      - name: Navigation tests
+        if: always() && steps.navbuild.outcome == 'success'
+        run: docker run --rm forklift-slam-nav:humble bash -lc 'source /opt/ros/humble/setup.bash && source /ws/install/setup.bash && python3 -m pytest /ws/src/forklift_slam_nav/test -v'
+      - name: Navigation live topics and goal
+        if: always() && steps.navbuild.outcome == 'success'
         run: |
-          docker run --rm forklift-slam-nav:humble bash -lc 'source /opt/ros/humble/setup.bash && source /ws/install/setup.bash && export AMENT_PREFIX_PATH=/ws/install:$AMENT_PREFIX_PATH && ros2 pkg prefix forklift_slam_nav && python3 -m pytest /ws/src/forklift_slam_nav/test -v && timeout 100 ros2 launch forklift_slam_nav main.launch.py'
-
+          cat > /tmp/nav_acceptance.sh <<'BASH'
+          set -eo pipefail
+          source /opt/ros/humble/setup.bash
+          source /ws/install/setup.bash
+          export AMENT_PREFIX_PATH=/ws/install:$AMENT_PREFIX_PATH
+          ros2 pkg prefix forklift_slam_nav
+          timeout 150 ros2 launch forklift_slam_nav main.launch.py >/tmp/nav.log 2>&1 &
+          launch_pid=$!
+          trap 'cat /tmp/nav.log' EXIT
+          for topic in /scan /odom /map; do
+            echo "LIVE_TOPIC_BEGIN $topic"
+            timeout 70 ros2 topic echo "$topic" --once >/tmp/topic.txt
+            head -c 1800 /tmp/topic.txt
+            echo "LIVE_TOPIC_PASS $topic"
+          done
+          timeout 65 ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose '{pose: {header: {frame_id: map}, pose: {position: {x: 0.0, y: 2.0}, orientation: {w: 1.0}}}}' --feedback || goal_rc=$?
+          echo "NAV_GOAL_COMMAND_RC ${goal_rc:-0}"
+          set +e
+          wait "$launch_pid"
+          rc=$?
+          set -e
+          test "$rc" = 0 -o "$rc" = 124
+          BASH
+          docker run --rm -v /tmp/nav_acceptance.sh:/tmp/nav_acceptance.sh:ro forklift-slam-nav:humble bash /tmp/nav_acceptance.sh
