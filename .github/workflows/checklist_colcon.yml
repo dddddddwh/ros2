@@ -13,4 +13,4 @@ jobs:
         with:
           sparse-checkout: src/ground/mujoco_forklift_pallet_docking
       - run: docker build -t mujoco-forklift-pallet-docking:latest src/ground/mujoco_forklift_pallet_docking
-      - run: docker run --rm mujoco-forklift-pallet-docking:latest bash -lc 'source /opt/ros/humble/setup.bash && source /ros_ws/install/setup.bash && colcon test --return-code-on-test-failure --packages-select mujoco_forklift_pallet_docking && colcon test-result --verbose'
+      - run: docker run --rm mujoco-forklift-pallet-docking:latest bash -lc 'source /opt/ros/humble/setup.bash && source /ros_ws/install/setup.bash && colcon test --merge-install --return-code-on-test-failure --packages-select mujoco_forklift_pallet_docking && colcon test-result --verbose'
